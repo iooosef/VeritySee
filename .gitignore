@@ -1,0 +1,23 @@
+.gradle/
+build/
+*/build/
+.idea/
+local.properties
+*.iml
+.kotlin/
+captures/
+.cxx/
+*.jks
+*.keystore
+
+# Claude Code / AI assistant
+.claude/
+CLAUDE.local.md
+*.claude.md
+.mcp.json
+
+# prompt/scratch files
+prompts/
+*.prompt
+*.prompt.md
+scratchpad/

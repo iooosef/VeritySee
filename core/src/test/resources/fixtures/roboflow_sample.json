@@ -1,0 +1,41 @@
+{
+  "note": "Real Roboflow mask annotation. Image size inferred as 1024x1024 (run lengths sum to 1048576).",
+  "input": {
+    "id": "5",
+    "type": "mask",
+    "label": "11",
+    "x": "568",
+    "y": "402.5",
+    "width": "86",
+    "height": "127",
+    "area": "8661",
+    "mask": "eJxFjcEKwkAMRH9pJuvBgseCCt0EKUWhtHgRhK70/2/dXWNleMMQJsljnJ6YuGDVOeHOobfB3gkf3HobbUlYqWKF0AUNkfYTQBQzFW8Q2IFbbVQBKnkmygK+Z+kl1gUPllvG7vDHX4QoniWKBs1+bc7HS9POr3TaAH5gM+k="
+  },
+  "expected": {
+    "imageWidth": 1024,
+    "imageHeight": 1024,
+    "cocoCompressedCounts": "X[]`0]1k0oN^l0W1USOUOhl0m0QSO[Okl0o1N2O1N2O3L3N3M1O1O1O1O1O0010O001ON2N2O1N2O100O100O100O0100O010O001O1O1O100N200O2N1O2N101N2O1N10O010O01O01000O01O01O0O2O1L4O1L4O1L4O1N2N2O1N3M2O1N2N2O2M2N3N2M2I9G8H9D^el<",
+    "runCount": 179,
+    "runSum": 1048576,
+    "firstRuns": [
+      537960,
+      45,
+      27,
+      12,
+      937,
+      51
+    ],
+    "area": 8661,
+    "bboxXYWH": [
+      525.0,
+      339.0,
+      86.0,
+      127.0
+    ],
+    "bboxCenter": [
+      568.0,
+      402.5
+    ],
+    "reencodedMaskEqualsInput": true
+  }
+}

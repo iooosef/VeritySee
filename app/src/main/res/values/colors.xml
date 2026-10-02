@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FFD600</color>
+    <color name="veritysee_yellow">#FFD600</color>
+    <color name="veritysee_yellow_dark">#F9A825</color>
+    <color name="veritysee_yellow_light">#FFF9C4</color>
+</resources>

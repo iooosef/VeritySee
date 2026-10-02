@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Annotator" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/veritysee_yellow</item>
+        <item name="android:colorPrimaryDark">@color/veritysee_yellow_dark</item>
+        <item name="android:colorAccent">@color/veritysee_yellow_dark</item>
+        <item name="android:windowBackground">@color/veritysee_yellow_light</item>
+        <item name="android:statusBarColor">@color/veritysee_yellow</item>
+    </style>
+</resources>
