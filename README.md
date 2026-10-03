@@ -24,6 +24,34 @@ Named after [![Verity](https://www.youtube.com/watch?v=tVlKLpxyCBY)](https://www
 
 Full spec's in `docs/SPEC.md`. File format rules in `docs/FORMATS.md`. Milestones in `docs/ROADMAP.md`.
 
+## What it expects in your dataset folder
+
+Point the app at a folder of images with (optionally) existing labels. It auto-detects the format from whatever's there. No labels at all is fine too — you'll just be starting from scratch.
+
+**YOLO**
+
+```
+images/ + labels/                                    flat
+images/{train,val,test}/ + labels/{train,val,test}/
+{train,valid,test}/images/ + {train,valid,test}/labels/   (Roboflow export)
+```
+
+Plus a `data.yaml` (or a plain `classes.txt`) with class names. One `.txt` per image, same base name, YOLO detect (`cls cx cy w h`) or segment (`cls x1 y1 ... xn yn`) lines.
+
+**COCO**
+
+```
+annotations/instances_<split>.json + images/<split>/
+<split>/_annotations.coco.json with images next to it   (Roboflow export)
+any single *.json at the root with "images" and "annotations" keys
+```
+
+**SAM**
+
+One JSON per image, same base name, sitting next to the image, SA-1B style (`image`, `annotations` with RLE `segmentation`).
+
+The app never touches your original label files — everything it imports and edits lives in `.annotator/` inside the dataset folder, and exports go to `.annotator/export/` (or a folder you pick). See `docs/FORMATS.md` for the exact per-format rules.
+
 ## Stack
 
 Kotlin, Jetpack Compose, Android only, minSdk 26. `:core` is plain Kotlin — no Android imports, runs on the JVM, fast to test. `:app` is where the SAF storage, UI, rendering, and gesture handling actually live.
