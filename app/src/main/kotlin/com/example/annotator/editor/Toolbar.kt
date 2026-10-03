@@ -3,6 +3,7 @@ package com.example.annotator.editor
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -72,12 +73,8 @@ fun Toolbar(
             ToolbarDivider()
 
             // History.
-            IconButton(onClick = onUndo, enabled = canUndo) {
-                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-            }
-            IconButton(onClick = onRedo, enabled = canRedo) {
-                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-            }
+            ToolButton(Icons.AutoMirrored.Filled.Undo, "Undo", selected = false, enabled = canUndo, onClick = onUndo)
+            ToolButton(Icons.AutoMirrored.Filled.Redo, "Redo", selected = false, enabled = canRedo, onClick = onRedo)
         }
     }
 }
@@ -96,12 +93,29 @@ private fun ToolbarDivider() {
 }
 
 @Composable
-private fun ToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+private fun ToolButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val tint = if (!enabled) {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    } else if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(onClick = onClick, enabled = enabled) {
+            Icon(icon, contentDescription = label, tint = tint)
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1,
         )
     }
 }
