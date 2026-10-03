@@ -4,11 +4,9 @@ An Android app for reviewing and editing image segmentation datasets (YOLO, COCO
 
 ## Why this exists
 
-Two weeks to annotate thousands of images. No room to be precious about tools.
+We have two weeks to annotate thousands of images for our undergrad thesis. Roboflow was our main driver, and it's fine, but coming from knowing other digital creative tools there are things about it that we would've wanted to have. Another big problem: no real mobile support. If you wanted to fix masks, you were stuck at a desk. But we have classes, we don't want to bring our bulky and heavy laptops and find power outlets that aren't always available.
 
-Roboflow was our main driver, and it's fine, but a few things about it kept slowing the review pass down. The real dealbreaker: no real mobile support. If you wanted to fix masks, you were stuck at a desk. Couch, commute, waiting room, didn't matter — none of that time was usable.
-
-So I vibecoded an app instead. Open a folder, see the auto-labeled annotations, fix them with box/brush/pencil, track what's been checked, export clean YOLO/COCO/SAM. Native Android, not a web wrapper — browsers still can't open a local folder and autosave into it reliably, so that decision made itself.
+So I vibecoded an app instead. Open a folder, see the auto-labeled annotations, fix them with box/brush/pencil, track what's been checked, export clean YOLO/COCO/SAM. Native Android, not a web wrapper as browsers still can't open a local folder and autosave into it reliably, so that decision made itself.
 
 ## The name
 
