@@ -102,12 +102,22 @@ class EditorViewModel(val opener: DatasetOpener, private val scope: CoroutineSco
     var fatalError by mutableStateOf<String?>(null)
         private set
 
+    // Non-null for the duration of load() (SPEC section 8: large folders can take a few
+    // seconds to scan/index), so the caller can show a staged progress indicator instead of
+    // a dead screen.
+    var loadProgress by mutableStateOf<String?>(null)
+        private set
+
     suspend fun load() {
         try {
+            loadProgress = "Scanning files…"
             allFiles = withContext(Dispatchers.IO) { opener.listAll() }
             images = opener.images(allFiles)
+            loadProgress = "Detecting format…"
             format = withContext(Dispatchers.IO) { opener.detectAndRecordFormat(allFiles) }
+            loadProgress = "Loading classes…"
             classes = withContext(Dispatchers.IO) { opener.ensureClasses(format, allFiles).associateBy { it.id } }
+            loadProgress = "Indexing…"
             withContext(Dispatchers.IO) { opener.refreshIndex(allFiles) }
             reviewState = withContext(Dispatchers.IO) { opener.projectStore.readState() }
 
@@ -116,6 +126,8 @@ class EditorViewModel(val opener: DatasetOpener, private val scope: CoroutineSco
             loadCurrent()
         } catch (e: SecurityException) {
             fatalError = "Lost access to this folder."
+        } finally {
+            loadProgress = null
         }
     }
 
@@ -162,8 +174,26 @@ class EditorViewModel(val opener: DatasetOpener, private val scope: CoroutineSco
             reviewed = nowReviewed,
             reviewedAt = if (nowReviewed) Instant.now().toString() else existing?.reviewedAt,
         )
+        val previousCount = reviewedCount()
         reviewState = reviewState.copy(images = reviewState.images + (image.relativePath to updated))
         saveStateDebounced()
+        // Celebrate every 100th image reviewed. Compared by hundreds-bucket rather than
+        // "== a multiple of 100" so toggling reviewed off and back on near a boundary can't
+        // double-fire, and so it still fires correctly if a bulk action ever crosses more
+        // than one bucket at once.
+        val newCount = reviewedCount()
+        if (nowReviewed && newCount / 100 > previousCount / 100) {
+            celebrationMilestone = newCount - (newCount % 100)
+        }
+    }
+
+    /** Non-null for exactly one milestone crossing (SPEC: celebratory moment every 100 images
+     * reviewed); the UI clears it via [dismissCelebration] once the celebration has shown. */
+    var celebrationMilestone by mutableStateOf<Int?>(null)
+        private set
+
+    fun dismissCelebration() {
+        celebrationMilestone = null
     }
 
     fun reviewedCount(): Int = reviewState.images.values.count { it.reviewed }

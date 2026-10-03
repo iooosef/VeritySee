@@ -20,12 +20,17 @@ interface ToolStrokeHandler {
  * If a second finger touches down mid-stroke, the in-progress tool stroke is cancelled (not
  * committed) and the gesture becomes pan/zoom for its remainder. A single finger that never
  * moves is reported as a tap rather than a start/end stroke.
+ *
+ * A multi-finger touch that lifts without ever panning or zooming is a tap shortcut instead,
+ * ibisPaint-style: two fingers = undo, three fingers = redo.
  */
 suspend fun PointerInputScope.detectToolGestures(
     tool: () -> Tool,
     transform: () -> ViewportTransform,
     onTransformChange: (ViewportTransform) -> Unit,
     stroke: ToolStrokeHandler,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
 ) {
     awaitEachGesture {
         var isPanning = false
@@ -33,6 +38,12 @@ suspend fun PointerInputScope.detectToolGestures(
         var moved = false
         var startImagePoint = Offset.Zero
         var startScreenPoint = Offset.Zero
+
+        // Peak simultaneous finger count and whether the multi-finger touch ever actually
+        // panned/zoomed -- a tap only counts as the undo/redo shortcut if it stayed put.
+        var maxFingerCount = 0
+        var multiFingerMoved = false
+        var multiFingerAnchor: Offset? = null
 
         while (true) {
             val event = awaitPointerEvent()
@@ -45,13 +56,18 @@ suspend fun PointerInputScope.detectToolGestures(
                     isStroking = false
                 }
                 isPanning = true
+                maxFingerCount = maxOf(maxFingerCount, pressed.size)
                 val centroid = pressed.map { it.position }.reduce { a, b -> a + b } / pressed.size.toFloat()
+                if (multiFingerAnchor == null) multiFingerAnchor = centroid
+                if (distance(centroid, multiFingerAnchor!!) > viewConfiguration.touchSlop) multiFingerMoved = true
+
                 val prevCentroid = pressed.map { it.position - it.positionChange() }.reduce { a, b -> a + b } / pressed.size.toFloat()
                 val pan = centroid - prevCentroid
 
                 val currentSpread = pressed.map { distance(it.position, centroid) }.average().toFloat()
                 val prevSpread = pressed.map { distance(it.position - it.positionChange(), prevCentroid) }.average().toFloat()
                 val zoom = if (prevSpread > 0.01f) currentSpread / prevSpread else 1f
+                if (kotlin.math.abs(zoom - 1f) > 0.03f) multiFingerMoved = true
 
                 onTransformChange(transform().panned(pan).zoomed(zoom, centroid))
                 pressed.forEach { it.consume() }
@@ -99,6 +115,11 @@ suspend fun PointerInputScope.detectToolGestures(
             } else {
                 stroke.onCancel()
                 stroke.onTap(startImagePoint)
+            }
+        } else if (isPanning && !multiFingerMoved) {
+            when (maxFingerCount) {
+                2 -> onUndo()
+                3 -> onRedo()
             }
         }
     }

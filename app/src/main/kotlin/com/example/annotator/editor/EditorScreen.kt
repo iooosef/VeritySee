@@ -245,10 +245,19 @@ fun EditorScreen(
                     transform = transform,
                     resetSignal = resetSignal,
                     onTransformChange = { transform = it },
+                    onUndo = { viewModel.undo() },
+                    onRedo = { viewModel.redo() },
                 )
 
                 if (isAdjustingBrushSize) {
                     BrushSizePreview(radiusPx = brushSizePx, modifier = Modifier.align(Alignment.Center))
+                }
+
+                viewModel.celebrationMilestone?.let { milestone ->
+                    ConfettiOverlay(
+                        message = "🎉 $milestone images reviewed!",
+                        onFinished = { viewModel.dismissCelebration() },
+                    )
                 }
 
                 ZoomChip(

@@ -13,10 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.BorderStyle
 import androidx.compose.material.icons.filled.Brush
-import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Gesture
@@ -31,7 +29,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
+import com.example.annotator.R
 
 @Composable
 fun Toolbar(
@@ -66,9 +67,9 @@ fun Toolbar(
             // not the multi-object box-select tool above.
             ToolButton(Icons.Filled.BorderStyle, "New box", currentTool == Tool.BOUNDING_BOX) { onToolSelected(Tool.BOUNDING_BOX) }
             ToolButton(Icons.Filled.Brush, "Brush", currentTool == Tool.BRUSH) { onToolSelected(Tool.BRUSH) }
-            ToolButton(Icons.Filled.Backspace, "Eraser", currentTool == Tool.ERASER) { onToolSelected(Tool.ERASER) }
+            ToolButton(ImageVector.vectorResource(R.drawable.ic_ink_eraser), "Eraser", currentTool == Tool.ERASER) { onToolSelected(Tool.ERASER) }
             ToolButton(Icons.Filled.Create, "Pencil", currentTool == Tool.PENCIL) { onToolSelected(Tool.PENCIL) }
-            ToolButton(Icons.Filled.ContentCut, "Knife", currentTool == Tool.KNIFE) { onToolSelected(Tool.KNIFE) }
+            ToolButton(ImageVector.vectorResource(R.drawable.ic_surgical), "Knife", currentTool == Tool.KNIFE) { onToolSelected(Tool.KNIFE) }
 
             ToolbarDivider()
 

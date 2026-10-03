@@ -6,6 +6,8 @@ import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
@@ -71,6 +74,8 @@ fun ImageCanvas(
     transform: ViewportTransform,
     resetSignal: Int = 0,
     onTransformChange: (ViewportTransform) -> Unit,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
 ) {
     var bitmap by remember(imageUri) { mutableStateOf<Bitmap?>(null) }
     var displayBitmap by remember(imageUri) { mutableStateOf<Bitmap?>(null) }
@@ -118,12 +123,15 @@ fun ImageCanvas(
     }
 
     val latestTransform by rememberUpdatedState(transform)
+    val latestBrushSizeScreenPx by rememberUpdatedState(brushSizeScreenPx)
     val latestOnTransformChange by rememberUpdatedState(onTransformChange)
     val latestDataset by rememberUpdatedState(dataset)
     val latestHiddenClassIds by rememberUpdatedState(hiddenClassIds)
     val latestHiddenAnnotationIds by rememberUpdatedState(hiddenAnnotationIds)
     val latestOnAnnotationTap by rememberUpdatedState(onAnnotationTap)
     val latestTool by rememberUpdatedState(tool)
+    val latestOnUndo by rememberUpdatedState(onUndo)
+    val latestOnRedo by rememberUpdatedState(onRedo)
 
     // Plain memoization tables (not Compose state) keyed by annotation id, reused across
     // recompositions: re-rasterizing/re-tracing every mask whenever *any* one annotation
@@ -134,37 +142,59 @@ fun ImageCanvas(
     val maskBitmapCache = remember { mutableMapOf<String, Pair<Rle, Bitmap>>() }
     val maskOutlineCache = remember { mutableMapOf<String, Pair<Rle, List<Polygon>>>() }
 
-    val maskBitmaps = remember(dataset) {
+    // Rasterizing + contour-tracing every mask is too slow to run inline during composition
+    // once a dataset has 100+ masks (it visibly freezes the frame) -- compute off the main
+    // thread instead and let the overlays pop in once ready. `overlaysRendering` drives a
+    // small non-blocking indicator while that's in flight.
+    var maskBitmaps by remember { mutableStateOf<Map<String, Bitmap>>(emptyMap()) }
+    var maskOutlines by remember { mutableStateOf<Map<String, List<Polygon>>>(emptyMap()) }
+    // Mask's own bounding box in image pixel coordinates, derived from its outline -- used to
+    // cull off-screen masks from the draw loop below (SPEC section 6: datasets with hundreds of
+    // annotations per image must not pay a per-frame draw cost for annotations that aren't
+    // currently visible).
+    var maskBounds by remember { mutableStateOf<Map<String, Rect>>(emptyMap()) }
+    var overlaysRendering by remember { mutableStateOf(false) }
+
+    LaunchedEffect(dataset) {
         val currentMaskIds = dataset?.annotations.orEmpty().mapNotNull { (it.shape as? Shape.Mask)?.let { _ -> it.id } }.toSet()
         maskBitmapCache.keys.retainAll(currentMaskIds)
-        dataset?.annotations.orEmpty().mapNotNull { ann ->
-            val mask = ann.shape as? Shape.Mask ?: return@mapNotNull null
-            val cached = maskBitmapCache[ann.id]
-            val bitmap = if (cached != null && cached.first == mask.rle) {
-                cached.second
-            } else {
-                MaskOverlay.toAlpha8Bitmap(mask.rle).also { maskBitmapCache[ann.id] = mask.rle to it }
-            }
-            ann.id to bitmap
-        }.toMap()
-    }
-
-    // Outer boundary of each mask, in image pixel coordinates, for a solid 1px outline on
-    // top of the semi-transparent fill (SPEC 4.3).
-    val maskOutlines = remember(dataset) {
-        val currentMaskIds = dataset?.annotations.orEmpty().mapNotNull { (it.shape as? Shape.Mask)?.let { _ -> it.id } }.toSet()
         maskOutlineCache.keys.retainAll(currentMaskIds)
-        dataset?.annotations.orEmpty().mapNotNull { ann ->
-            val mask = ann.shape as? Shape.Mask ?: return@mapNotNull null
-            val cached = maskOutlineCache[ann.id]
-            val outline = if (cached != null && cached.first == mask.rle) {
-                cached.second
-            } else {
-                val grid = RleCodec.decode(mask.rle)
-                ContourTracer.trace(grid).map { it.points }.also { maskOutlineCache[ann.id] = mask.rle to it }
-            }
-            ann.id to outline
-        }.toMap()
+
+        overlaysRendering = true
+        val (bitmaps, outlines, bounds) = withContext(Dispatchers.Default) {
+            val bitmaps = dataset?.annotations.orEmpty().mapNotNull { ann ->
+                val mask = ann.shape as? Shape.Mask ?: return@mapNotNull null
+                val cached = maskBitmapCache[ann.id]
+                val bitmap = if (cached != null && cached.first == mask.rle) {
+                    cached.second
+                } else {
+                    MaskOverlay.toAlpha8Bitmap(mask.rle).also { maskBitmapCache[ann.id] = mask.rle to it }
+                }
+                ann.id to bitmap
+            }.toMap()
+
+            // Outer boundary of each mask, in image pixel coordinates, for a solid 1px outline
+            // on top of the semi-transparent fill (SPEC 4.3).
+            val outlines = dataset?.annotations.orEmpty().mapNotNull { ann ->
+                val mask = ann.shape as? Shape.Mask ?: return@mapNotNull null
+                val cached = maskOutlineCache[ann.id]
+                val outline = if (cached != null && cached.first == mask.rle) {
+                    cached.second
+                } else {
+                    val grid = RleCodec.decode(mask.rle)
+                    ContourTracer.trace(grid).map { it.points }.also { maskOutlineCache[ann.id] = mask.rle to it }
+                }
+                ann.id to outline
+            }.toMap()
+
+            val bounds = outlines.mapValues { (_, polygons) -> boundingBox(polygons) }
+
+            Triple(bitmaps, outlines, bounds)
+        }
+        maskBitmaps = bitmaps
+        maskOutlines = outlines
+        maskBounds = bounds
+        overlaysRendering = false
     }
 
     val pendingMaskBitmap = remember(pendingShape) { (pendingShape as? Shape.Mask)?.let { MaskOverlay.toAlpha8Bitmap(it.rle) } }
@@ -194,7 +224,7 @@ fun ImageCanvas(
                 existingRle = targetMaskRle,
                 imageSize = dataset?.size ?: com.example.annotator.core.model.ImageSize(0, 0),
                 erase = false,
-                radiusImagePx = { brushSizeScreenPx / latestTransform.totalScale },
+                radiusImagePx = { latestBrushSizeScreenPx / latestTransform.totalScale },
                 onPreviewPoint = { brushPreviewPoint = it },
                 onCommit = onCommitMaskStroke,
             )
@@ -203,7 +233,7 @@ fun ImageCanvas(
                 existingRle = targetMaskRle,
                 imageSize = dataset?.size ?: com.example.annotator.core.model.ImageSize(0, 0),
                 erase = true,
-                radiusImagePx = { brushSizeScreenPx / latestTransform.totalScale },
+                radiusImagePx = { latestBrushSizeScreenPx / latestTransform.totalScale },
                 onPreviewPoint = { brushPreviewPoint = it },
                 onCommit = onCommitMaskStroke,
             )
@@ -270,6 +300,7 @@ fun ImageCanvas(
         return
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Canvas(
         modifier = Modifier
             .fillMaxSize()
@@ -279,6 +310,8 @@ fun ImageCanvas(
                     transform = { latestTransform },
                     onTransformChange = latestOnTransformChange,
                     stroke = tapHandlingStroke,
+                    onUndo = { latestOnUndo() },
+                    onRedo = { latestOnRedo() },
                 )
             },
     ) {
@@ -290,6 +323,13 @@ fun ImageCanvas(
         val image = (displayBitmap ?: bmp).asImageBitmap()
         val dstOffset = Offset(transform.offset.x, transform.offset.y)
         val dstSize = Size(bmp.width * transform.totalScale, bmp.height * transform.totalScale)
+
+        // Viewport in image pixel coordinates, for culling annotations that aren't currently
+        // on screen out of the per-frame draw loop below -- a dataset can have hundreds of
+        // annotations on one image, and most won't be visible at once while zoomed/panned in.
+        val viewportTopLeft = transform.screenToImage(Offset.Zero)
+        val viewportBottomRight = transform.screenToImage(Offset(size.width, size.height))
+        val viewportImageRect = Rect(viewportTopLeft.x, viewportTopLeft.y, viewportBottomRight.x, viewportBottomRight.y)
 
         drawImage(
             image = image,
@@ -307,6 +347,8 @@ fun ImageCanvas(
                 val selectionDash = if (selected) PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 6.dp.toPx())) else null
                 when (val shape = annotation.shape) {
                     is Shape.Mask -> {
+                        val bounds = maskBounds[annotation.id]
+                        if (bounds != null && !bounds.overlaps(viewportImageRect)) return@forEach
                         val maskBmp = maskBitmaps[annotation.id] ?: return@forEach
                         val maskImage = maskBmp.asImageBitmap()
                         drawImage(
@@ -324,6 +366,8 @@ fun ImageCanvas(
                         }
                     }
                     is Shape.Box -> {
+                        val boxRect = Rect(shape.x.toFloat(), shape.y.toFloat(), (shape.x + shape.w).toFloat(), (shape.y + shape.h).toFloat())
+                        if (!boxRect.overlaps(viewportImageRect)) return@forEach
                         val topLeft = transform.imageToScreen(Offset(shape.x.toFloat(), shape.y.toFloat()))
                         val boxSize = Size(shape.w.toFloat() * transform.totalScale, shape.h.toFloat() * transform.totalScale)
                         drawRect(
@@ -405,6 +449,24 @@ fun ImageCanvas(
             }
         }
     }
+
+    if (overlaysRendering) {
+        androidx.compose.material3.Surface(
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+            tonalElevation = 3.dp,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        ) {
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                Text("Rendering overlays…")
+            }
+        }
+    }
+    }
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawHandles(topLeft: Offset, size: Size, color: Color) {
@@ -446,6 +508,28 @@ private fun hitTest(
             imagePoint.y >= shape.y && imagePoint.y <= shape.y + shape.h
     }
     return boxHit?.id
+}
+
+/** Smallest axis-aligned rect (image pixel coords) covering every point of every ring in
+ * [polygons]; [Rect.Zero] for an empty mask -- harmless either way since drawing a mask with no
+ * foreground pixels produces no visible pixels regardless of whether it gets culled. */
+private fun boundingBox(polygons: List<Polygon>): Rect {
+    var minX = Float.MAX_VALUE
+    var minY = Float.MAX_VALUE
+    var maxX = -Float.MAX_VALUE
+    var maxY = -Float.MAX_VALUE
+    for (polygon in polygons) {
+        for (point in polygon) {
+            val x = point.x.toFloat()
+            val y = point.y.toFloat()
+            if (x < minX) minX = x
+            if (y < minY) minY = y
+            if (x > maxX) maxX = x
+            if (y > maxY) maxY = y
+        }
+    }
+    if (minX > maxX || minY > maxY) return Rect.Zero
+    return Rect(minX, minY, maxX, maxY)
 }
 
 private fun outlinePath(outline: Polygon, transform: ViewportTransform): Path {

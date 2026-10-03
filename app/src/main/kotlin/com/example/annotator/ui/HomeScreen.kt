@@ -1,5 +1,6 @@
 package com.example.annotator.ui
 
+import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
@@ -9,13 +10,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -32,9 +37,12 @@ import com.example.annotator.storage.RecentFolders
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val GITHUB_URL = "https://github.com/iooosef/VeritySee"
+
 @Composable
 fun HomeScreen(recentFolders: RecentFolders, onOpenFolderClick: () -> Unit, onRecentFolderClick: (Uri) -> Unit) {
     val recents by recentFolders.recentUris.collectAsState(initial = emptyList())
+    var aboutOpen by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -51,7 +59,45 @@ fun HomeScreen(recentFolders: RecentFolders, onOpenFolderClick: () -> Unit, onRe
                 }
             }
         }
+        TextButton(
+            onClick = { aboutOpen = true },
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
+        ) {
+            Text("About this app")
+        }
     }
+
+    if (aboutOpen) {
+        AboutDialog(onDismiss = { aboutOpen = false })
+    }
+}
+
+/** Brief summary pulled from README.md's "Why this exists" / "What it does" sections. */
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("About VeritySee") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("An Android app for reviewing and editing image segmentation datasets (YOLO, COCO, SAM) on your phone or tablet.")
+                Text(
+                    "Open a folder, see the auto-labeled annotations, fix them with box/brush/pencil, " +
+                        "track what's been reviewed, and export clean YOLO/COCO/SAM datasets. Your original " +
+                        "label files are never modified.",
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        dismissButton = {
+            TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))) }) {
+                Text("View on GitHub")
+            }
+        },
+    )
 }
 
 @Composable
